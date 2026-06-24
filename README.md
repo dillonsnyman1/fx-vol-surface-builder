@@ -6,7 +6,7 @@ Garman-Kohlhagen, and analyses risk reversals and butterfly spreads.
 
 - **Backend**: Python + FastAPI for the GK pricing and vol surface engine
 - **Frontend**: React + Vite + TypeScript dashboard (pricer, sensitivity,
-  vol surface, smile analysis, Greeks heatmap) *(in progress)*
+  vol surface, smile analysis, Greeks heatmap)
 
 > **Disclaimer**: Simplified demo built for portfolio purposes. Not a
 > production pricing system and should not be used for live trading or
@@ -165,12 +165,14 @@ surface construction, and sample market quotes for three currency pairs.
 All endpoints tested with 44 passing pytest tests. See
 [`backend/`](backend/).
 
-### Phase 2: Full-stack local demo *(planned)*
+### Phase 2: Full-stack local demo *(in progress)*
 
 React + Vite + TypeScript dashboard with five tabs: Pricer, Sensitivity,
-Vol Surface, Smile Analysis, and Greeks Heatmap. Recharts line charts
-for smile cross-sections and term structures, custom SVG heatmaps for
-the vol surface contour and Greeks grid.
+Vol Surface, Smile Analysis, and Greeks Heatmap. App shell with tab
+navigation, TypeScript types mirroring backend models, and API client
+are complete. Recharts line charts for smile cross-sections and term
+structures, custom SVG heatmaps for the vol surface contour and Greeks
+grid are next. See [`frontend/`](frontend/).
 
 ### Phase 3: AWS deployment *(planned)*
 
@@ -228,6 +230,13 @@ cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+```
+
+**Frontend**
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
 **Tests**
