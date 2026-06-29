@@ -165,14 +165,15 @@ surface construction, and sample market quotes for three currency pairs.
 All endpoints tested with 44 passing pytest tests. See
 [`backend/`](backend/).
 
-### Phase 2: Full-stack local demo *(in progress)*
+### Phase 2: Full-stack local demo *(complete)*
 
-React + Vite + TypeScript dashboard with five tabs: Pricer, Sensitivity,
-Vol Surface, Smile Analysis, and Greeks Heatmap. App shell with tab
-navigation, TypeScript types mirroring backend models, and API client
-are complete. Recharts line charts for smile cross-sections and term
-structures, custom SVG heatmaps for the vol surface contour and Greeks
-grid are next. See [`frontend/`](frontend/).
+React + Vite + TypeScript dashboard with five tabs: Pricer (input form,
+price result cards, six-Greek panel), Sensitivity (interactive Greeks
+vs parameter chart with toggle controls), Vol Surface (SVG contour
+heatmap with interpolation method selector), Smile Analysis (vol smile
+cross-section, ATM term structure, risk reversal and butterfly charts),
+and Greeks Heatmap (spot x vol grid with selectable Greek). See
+[`frontend/`](frontend/).
 
 ### Phase 3: AWS deployment *(planned)*
 
