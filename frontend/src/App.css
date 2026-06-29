@@ -65,6 +65,51 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Toggle button group */
+
+.toggle-group {
+  display: flex;
+  gap: 0;
+}
+
+.toggle-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-right-width: 0;
+  background: var(--card-bg);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.toggle-btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.toggle-btn:last-child {
+  border-right-width: 1px;
+  border-radius: 0 6px 6px 0;
+}
+
+.toggle-btn:only-child {
+  border-right-width: 1px;
+  border-radius: 6px;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.toggle-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* Summary cards */
 
 .summary-cards {

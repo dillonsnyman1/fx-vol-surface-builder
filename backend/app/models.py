@@ -215,3 +215,17 @@ class SampleQuotesResponse(BaseModel):
     r_d: float
     r_f: float
     tenors: list[TenorQuote]
+
+
+# ---------------------------------------------------------------------------
+# Live spot rate
+# ---------------------------------------------------------------------------
+
+class LiveSpotRequest(BaseModel):
+    pair: str = Field(description="Currency pair, e.g. EURUSD")
+
+
+class LiveSpotResponse(BaseModel):
+    pair: str
+    spot: float | None
+    available: bool

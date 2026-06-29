@@ -11,6 +11,8 @@ import {
 import { GreeksHeatmap } from "./components/GreeksHeatmap.tsx";
 import { GreeksPanel } from "./components/GreeksPanel.tsx";
 import { GreeksSensitivityChart } from "./components/GreeksSensitivityChart.tsx";
+import { LiveSpotControl } from "./components/LiveSpotControl.tsx";
+import { MarketQuoteTable } from "./components/MarketQuoteTable.tsx";
 import { PriceResultPanel } from "./components/PriceResultPanel.tsx";
 import { PricerForm } from "./components/PricerForm.tsx";
 import { ATMTermStructureChart, ButterflyChart, RiskReversalChart } from "./components/RRBFCharts.tsx";
@@ -25,6 +27,7 @@ import type {
   RRBFTermStructureResponse,
   SampleQuotesResponse,
   SmileResponse,
+  TenorQuote,
   VolSurfaceResponse,
 } from "./types/vol.ts";
 import { DEFAULT_GK_INPUTS } from "./types/vol.ts";
@@ -39,42 +42,75 @@ const TABS: [Tab, string][] = [
   ["greeks-heatmap", "Greeks Heatmap"],
 ];
 
+const PAIRS = ["EURUSD", "USDJPY", "GBPUSD"];
+
+// Fields loaded from the pair/live fetch that PricerForm should track for edit/reset
+type InputSource = { S: number; r_d: number; r_f: number; sigma: number };
+
 function App() {
+  const [pair, setPair] = useState("EURUSD");
   const [sampleData, setSampleData] = useState<SampleQuotesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("pricer");
+  const [tab, setTab] = useState<Tab>(() => {
+    const hash = window.location.hash.slice(1);
+    return TABS.some(([k]) => k === hash) ? (hash as Tab) : "pricer";
+  });
 
-  // Pricer state
+  // Single source of truth for all pricing/surface inputs
   const [inputs, setInputs] = useState(DEFAULT_GK_INPUTS);
+  // Snapshot of values last loaded from pair selection or live fetch - drives edit indicators in PricerForm
+  const [inputSource, setInputSource] = useState<InputSource | null>(null);
+
+  const [tenors, setTenors] = useState<TenorQuote[]>([]);
   const [priceResult, setPriceResult] = useState<GKPriceResponse | null>(null);
   const [pricing, setPricing] = useState(false);
-
-  // Vol surface state
   const [volSurface, setVolSurface] = useState<VolSurfaceResponse | null>(null);
   const [interpMethod, setInterpMethod] = useState<InterpolationMethod>("polynomial");
-
-  // Smile state
   const [smileData, setSmileData] = useState<SmileResponse | null>(null);
   const [smileTenorIdx, setSmileTenorIdx] = useState(4);
-
-  // RR/BF state
   const [rrbf, setRRBF] = useState<RRBFTermStructureResponse | null>(null);
-
-  // Greeks heatmap state
   const [heatmapData, setHeatmapData] = useState<GreeksHeatmapResponse | null>(null);
   const [heatmapGreek, setHeatmapGreek] = useState<GreekName>("delta");
 
-  useEffect(() => {
+  function loadPair(p: string) {
+    setPair(p);
     setLoading(true);
-    fetchSampleQuotes()
-      .then(setSampleData)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load sample quotes"))
+    setError(null);
+    fetchSampleQuotes(p)
+      .then((data) => {
+        setSampleData(data);
+        setTenors(data.tenors);
+        const midIdx = Math.min(4, data.tenors.length - 1);
+        setSmileTenorIdx(midIdx);
+        const sigma = data.tenors[midIdx]?.atm_vol ?? DEFAULT_GK_INPUTS.sigma;
+        setInputs((prev) => ({
+          ...prev,
+          S: data.spot, K: data.spot,
+          r_d: data.r_d, r_f: data.r_f,
+          sigma,
+        }));
+        setInputSource({ S: data.spot, r_d: data.r_d, r_f: data.r_f, sigma });
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load quotes"))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { loadPair("EURUSD"); }, []);
+
+  // When live spot is fetched, update inputs.S and the source snapshot
+  function handleLiveSpotFetched(v: number) {
+    setInputs((prev) => ({ ...prev, S: v }));
+    setInputSource((prev) => prev ? { ...prev, S: v } : { S: v, r_d: inputs.r_d, r_f: inputs.r_f, sigma: inputs.sigma });
+  }
 
   function handleInputChange(field: string, value: number | string) {
     setInputs((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleResetField(field: keyof InputSource) {
+    if (!inputSource) return;
+    setInputs((prev) => ({ ...prev, [field]: inputSource[field] }));
   }
 
   function handlePrice() {
@@ -86,36 +122,31 @@ function App() {
   }
 
   useEffect(() => {
+    if (!sampleData) return;
     handlePrice();
-  }, []);
-
-  // Build vol surface when sample data or interp method changes
-  useEffect(() => {
-    if (!sampleData) return;
-    buildVolSurface(sampleData.spot, sampleData.r_d, sampleData.r_f, sampleData.tenors, interpMethod)
-      .then(setVolSurface)
-      .catch(() => {});
-  }, [sampleData, interpMethod]);
-
-  // Build smile for selected tenor
-  useEffect(() => {
-    if (!sampleData) return;
-    const t = sampleData.tenors[smileTenorIdx] ?? sampleData.tenors[0];
-    buildSmile(sampleData.spot, sampleData.r_d, sampleData.r_f, t.tenor_years,
-      t.atm_vol, t.rr_25, t.bf_25, t.rr_10, t.bf_10, interpMethod)
-      .then(setSmileData)
-      .catch(() => {});
-  }, [sampleData, smileTenorIdx, interpMethod]);
-
-  // RR/BF term structure
-  useEffect(() => {
-    if (!sampleData) return;
-    fetchRRBFTermStructure(sampleData.tenors)
-      .then(setRRBF)
-      .catch(() => {});
   }, [sampleData]);
 
-  // Greeks heatmap
+  // Vol surface rebuilds whenever market inputs or tenors/method change
+  useEffect(() => {
+    if (tenors.length < 2) return;
+    buildVolSurface(inputs.S, inputs.r_d, inputs.r_f, tenors, interpMethod)
+      .then(setVolSurface)
+      .catch(() => {});
+  }, [inputs.S, inputs.r_d, inputs.r_f, tenors, interpMethod]);
+
+  useEffect(() => {
+    if (tenors.length === 0) return;
+    const t = tenors[smileTenorIdx] ?? tenors[0];
+    buildSmile(inputs.S, inputs.r_d, inputs.r_f, t.tenor_years, t.atm_vol, t.rr_25, t.bf_25, t.rr_10, t.bf_10, interpMethod)
+      .then(setSmileData)
+      .catch(() => {});
+  }, [inputs.S, inputs.r_d, inputs.r_f, tenors, smileTenorIdx, interpMethod]);
+
+  useEffect(() => {
+    if (tenors.length < 2) return;
+    fetchRRBFTermStructure(tenors).then(setRRBF).catch(() => {});
+  }, [tenors]);
+
   useEffect(() => {
     fetchGreeksHeatmap(inputs.S, inputs.K, inputs.T, inputs.r_d, inputs.r_f, inputs.sigma, inputs.option_type as OptionType, heatmapGreek)
       .then(setHeatmapData)
@@ -137,19 +168,45 @@ function App() {
         </p>
       </header>
 
+      <div className="toolbar">
+        <div className="form-row">
+          <label className="form-field">
+            Currency Pair
+            <select value={pair} onChange={(e) => loadPair(e.target.value)}>
+              {PAIRS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <LiveSpotControl pair={pair} spot={inputs.S} onSpotChange={handleLiveSpotFetched} />
+          <label className="form-field">
+            r domestic
+            <input type="number" step={0.0025} value={inputs.r_d}
+              onChange={(e) => setInputs((prev) => ({ ...prev, r_d: +e.target.value }))}
+              style={{ width: 80 }}
+            />
+          </label>
+          <label className="form-field">
+            r foreign
+            <input type="number" step={0.0025} value={inputs.r_f}
+              onChange={(e) => setInputs((prev) => ({ ...prev, r_f: +e.target.value }))}
+              style={{ width: 80 }}
+            />
+          </label>
+        </div>
+      </div>
+
       <nav className="tab-nav">
         {TABS.map(([key, label]) => (
           <button
             key={key}
             className={`tab-button${tab === key ? " active" : ""}`}
-            onClick={() => setTab(key)}
+            onClick={() => { setTab(key); window.location.hash = key; }}
           >
             {label}
           </button>
         ))}
       </nav>
 
-      {loading && <div className="status-message">Loading...</div>}
+      {loading && <div className="status-message">Loading {pair} quotes...</div>}
       {error && <div className="status-message error">{error}</div>}
 
       {!loading && !error && (
@@ -160,7 +217,9 @@ function App() {
               <PricerForm
                 {...inputs}
                 optionType={inputs.option_type}
+                source={inputSource ?? undefined}
                 onChange={handleInputChange}
+                onReset={handleResetField}
                 onPrice={handlePrice}
                 loading={pricing}
               />
@@ -181,44 +240,51 @@ function App() {
             />
           )}
 
-          {tab === "vol-surface" && sampleData && (
+          {tab === "vol-surface" && (
             <>
               <div className="toolbar" style={{ marginBottom: 16 }}>
                 <div className="form-row">
-                  <label className="form-field">
+                  <div className="form-field">
                     Interpolation
-                    <select value={interpMethod} onChange={(e) => setInterpMethod(e.target.value as InterpolationMethod)}>
-                      <option value="polynomial">Polynomial</option>
-                      <option value="cubic_spline">Cubic Spline</option>
-                      <option value="vanna_volga">Vanna-Volga</option>
-                    </select>
-                  </label>
+                    <div className="toggle-group">
+                      {(["polynomial", "cubic_spline", "vanna_volga"] as InterpolationMethod[]).map((m) => (
+                        <button key={m} className={`toggle-btn${interpMethod === m ? " active" : ""}`} onClick={() => setInterpMethod(m)}>
+                          {m === "polynomial" ? "Polynomial" : m === "cubic_spline" ? "Cubic Spline" : "Vanna-Volga"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
+              <MarketQuoteTable tenors={tenors} onUpdate={setTenors} />
               {volSurface && <VolSurfaceHeatmap data={volSurface} />}
             </>
           )}
 
-          {tab === "smile-analysis" && sampleData && (
+          {tab === "smile-analysis" && (
             <>
               <div className="toolbar" style={{ marginBottom: 16 }}>
                 <div className="form-row">
-                  <label className="form-field">
+                  <div className="form-field">
                     Tenor
-                    <select value={smileTenorIdx} onChange={(e) => setSmileTenorIdx(+e.target.value)}>
-                      {sampleData.tenors.map((t, i) => (
-                        <option key={t.tenor_label} value={i}>{t.tenor_label}</option>
+                    <div className="toggle-group">
+                      {tenors.map((t, i) => (
+                        <button key={t.tenor_label} className={`toggle-btn${smileTenorIdx === i ? " active" : ""}`} onClick={() => setSmileTenorIdx(i)}>
+                          {t.tenor_label}
+                        </button>
                       ))}
-                    </select>
-                  </label>
-                  <label className="form-field">
+                    </div>
+                  </div>
+                  <div className="form-field">
                     Interpolation
-                    <select value={interpMethod} onChange={(e) => setInterpMethod(e.target.value as InterpolationMethod)}>
-                      <option value="polynomial">Polynomial</option>
-                      <option value="cubic_spline">Cubic Spline</option>
-                      <option value="vanna_volga">Vanna-Volga</option>
-                    </select>
-                  </label>
+                    <div className="toggle-group">
+                      {(["polynomial", "cubic_spline", "vanna_volga"] as InterpolationMethod[]).map((m) => (
+                        <button key={m} className={`toggle-btn${interpMethod === m ? " active" : ""}`} onClick={() => setInterpMethod(m)}>
+                          {m === "polynomial" ? "Polynomial" : m === "cubic_spline" ? "Cubic Spline" : "Vanna-Volga"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="charts-row">
@@ -238,17 +304,19 @@ function App() {
             <>
               <div className="toolbar" style={{ marginBottom: 16 }}>
                 <div className="form-row">
-                  <label className="form-field">
+                  <div className="form-field">
                     Greek
-                    <select value={heatmapGreek} onChange={(e) => setHeatmapGreek(e.target.value as GreekName)}>
-                      <option value="delta">Delta</option>
-                      <option value="gamma">Gamma</option>
-                      <option value="vega">Vega</option>
-                      <option value="theta">Theta</option>
-                      <option value="rho_d">Rho (domestic)</option>
-                      <option value="rho_f">Rho (foreign)</option>
-                    </select>
-                  </label>
+                    <div className="toggle-group">
+                      {([
+                        ["delta", "Delta"], ["gamma", "Gamma"], ["vega", "Vega"],
+                        ["theta", "Theta"], ["rho_d", "Rho (d)"], ["rho_f", "Rho (f)"],
+                      ] as [GreekName, string][]).map(([g, label]) => (
+                        <button key={g} className={`toggle-btn${heatmapGreek === g ? " active" : ""}`} onClick={() => setHeatmapGreek(g)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
               {heatmapData && <GreeksHeatmap data={heatmapData} />}

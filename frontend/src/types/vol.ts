@@ -120,6 +120,12 @@ export const SENSITIVITY_LABELS: Record<SensitivityParam, string> = {
   rate_foreign: "Foreign Rate",
 };
 
+export interface LiveSpotResponse {
+  pair: string;
+  spot: number | null;
+  available: boolean;
+}
+
 export const DEFAULT_GK_INPUTS = {
   S: 1.09,
   K: 1.09,

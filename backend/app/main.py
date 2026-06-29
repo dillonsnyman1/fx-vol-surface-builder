@@ -17,6 +17,8 @@ from app.models import (
     GreeksHeatmapResponse,
     GreeksSensitivityRequest,
     FxGreeks,
+    LiveSpotRequest,
+    LiveSpotResponse,
     RRBFTermStructureRequest,
     RRBFTermStructureResponse,
     SampleQuotesResponse,
@@ -26,7 +28,7 @@ from app.models import (
     VolSurfaceRequest,
     VolSurfaceResponse,
 )
-from app.sample_data import generate_sample_quotes
+from app.sample_data import fetch_live_spot, generate_sample_quotes
 from app.vol_surface import (
     build_smile,
     build_surface,
@@ -191,6 +193,16 @@ async def greeks_heatmap(req: GreeksHeatmapRequest) -> GreeksHeatmapResponse:
     return GreeksHeatmapResponse(
         spots=spots, vols=vols, values=values, greek=req.greek.value,
     )
+
+
+# ---------------------------------------------------------------------------
+# Live spot rate
+# ---------------------------------------------------------------------------
+
+@app.post("/api/live-spot", response_model=LiveSpotResponse)
+async def live_spot(req: LiveSpotRequest) -> LiveSpotResponse:
+    spot = fetch_live_spot(req.pair)
+    return LiveSpotResponse(pair=req.pair.upper(), spot=spot, available=spot is not None)
 
 
 # ---------------------------------------------------------------------------

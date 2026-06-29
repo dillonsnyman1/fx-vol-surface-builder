@@ -162,18 +162,37 @@ non-decreasing in T at each strike. This is verified in the test suite.
 FastAPI backend with Garman-Kohlhagen pricing, implied vol solver,
 delta-to-strike conversion, three smile interpolation methods, full
 surface construction, and sample market quotes for three currency pairs.
-All endpoints tested with 44 passing pytest tests. See
+All endpoints tested with 53 passing pytest tests. See
 [`backend/`](backend/).
 
 ### Phase 2: Full-stack local demo *(complete)*
 
-React + Vite + TypeScript dashboard with five tabs: Pricer (input form,
-price result cards, six-Greek panel), Sensitivity (interactive Greeks
-vs parameter chart with toggle controls), Vol Surface (SVG contour
-heatmap with interpolation method selector), Smile Analysis (vol smile
-cross-section, ATM term structure, risk reversal and butterfly charts),
-and Greeks Heatmap (spot x vol grid with selectable Greek). See
-[`frontend/`](frontend/).
+React + Vite + TypeScript dashboard with five tabs:
+
+- **Pricer** - full GK input form with price result cards and six-Greek
+  panel. Spot, r_d, r_f and sigma are sourced from the selected pair
+  and track edits with amber indicators and one-click reset, using the
+  same fetch/edit/reset/staleness pattern as the
+  [options pricer dashboard](https://github.com/dillonsnyman1/options-pricer-dashboard).
+  Live spot rates are pulled from Yahoo Finance via a "Live" button.
+  Strike is an independent user parameter.
+
+- **Sensitivity** - Greeks vs parameter chart with toggle buttons to
+  select which parameter to vary and which Greeks to display.
+
+- **Vol Surface** - editable market quote table (ATM/RR/BF per tenor,
+  add/remove tenors) feeding an SVG contour heatmap. Interpolation
+  method selected via toggle buttons (Polynomial / Cubic Spline /
+  Vanna-Volga).
+
+- **Smile Analysis** - tenor selected via toggle buttons, vol smile
+  cross-section with ATM/25d strike markers, plus ATM term structure,
+  risk reversal and butterfly charts.
+
+- **Greeks Heatmap** - spot x vol SVG grid with Greek selected via
+  toggle buttons.
+
+See [`frontend/`](frontend/).
 
 ### Phase 3: AWS deployment *(planned)*
 
@@ -193,11 +212,18 @@ GitHub Actions CI/CD pipeline.
 | POST | `/api/smile` | Single-tenor smile from delta-space quotes |
 | POST | `/api/rr-bf-term-structure` | Risk reversal and butterfly values across tenors |
 | POST | `/api/greeks-heatmap` | 2D grid of a selected Greek (spot x vol) |
+| POST | `/api/live-spot` | Live FX spot rate from Yahoo Finance for a currency pair |
 | GET | `/api/health` | Health check |
 
 ---
 
 ## Known limitations and possible extensions
+
+- **No live implied vol.** Spot rates are fetched live from Yahoo
+  Finance (`EURUSD=X` etc.), but FX implied vol is not available from
+  public APIs. Sigma is sourced from the sample ATM vol when a pair
+  loads and can be edited manually. A production system would source
+  implied vol from a provider such as Bloomberg or Refinitiv.
 
 - **No SABR calibration.** The smile interpolation uses polynomial,
   cubic spline, and vanna-volga methods. Adding SABR (Stochastic Alpha

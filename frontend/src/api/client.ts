@@ -3,6 +3,7 @@ import type {
   GreeksHeatmapResponse,
   GreekName,
   InterpolationMethod,
+  LiveSpotResponse,
   OptionType,
   RRBFTermStructureResponse,
   SampleQuotesResponse,
@@ -132,6 +133,10 @@ export function fetchRRBFTermStructure(
   return post<RRBFTermStructureResponse>("/api/rr-bf-term-structure", {
     tenors,
   });
+}
+
+export function fetchLiveSpot(pair: string): Promise<LiveSpotResponse> {
+  return post<LiveSpotResponse>("/api/live-spot", { pair });
 }
 
 export function fetchGreeksHeatmap(

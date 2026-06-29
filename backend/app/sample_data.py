@@ -46,3 +46,17 @@ SAMPLE_QUOTES = {
 
 def generate_sample_quotes(pair: str = "EURUSD") -> dict:
     return SAMPLE_QUOTES.get(pair.upper(), SAMPLE_QUOTES["EURUSD"])
+
+
+def fetch_live_spot(pair: str) -> float | None:
+    import yfinance as yf  # lazy import - heavy, only needed for this endpoint
+
+    ticker_symbol = f"{pair.upper()}=X"
+    try:
+        tk = yf.Ticker(ticker_symbol)
+        hist = tk.history(period="1d")
+        if hist.empty:
+            return None
+        return float(hist["Close"].iloc[-1])
+    except Exception:
+        return None
